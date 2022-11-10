@@ -165,6 +165,13 @@ DlgGeneral::DlgGeneral(QWidget *parent, Okular::EmbedMode embedMode)
     openInContinuousModeByDefault->setText(i18nc("@option:check Config dialog, general page", "Open in continuous mode by default"));
     openInContinuousModeByDefault->setObjectName(QStringLiteral("kcfg_ViewContinuous"));
     layout->addRow(programFeaturesLabel(), openInContinuousModeByDefault);
+
+    // Checkbox: turn on ultrasmooth scroll
+    QCheckBox *ultraSmoothScroll = new QCheckBox(this);
+    ultraSmoothScroll->setText(i18nc("@option:check Config dialog, general page", "Turn ultra smooth scrolling on"));
+    ultraSmoothScroll->setObjectName(QStringLiteral("kcfg_UltraSmoothScroll"));
+    layout->addRow(programFeaturesLabel(), ultraSmoothScroll); 
+
     // END Program features section
 
     // If no Program features section, don’t add a second spacer:
@@ -179,6 +186,29 @@ DlgGeneral::DlgGeneral(QWidget *parent, Okular::EmbedMode embedMode)
     overviewColumns->setMaximum(10);
     overviewColumns->setObjectName(QStringLiteral("kcfg_ViewColumns"));
     layout->addRow(i18nc("@label:spinbox Config dialog, general page", "Overview columns:"), overviewColumns);
+
+    // Spinbox: page paddings
+    QSpinBox *pagePaddings = new QSpinBox(this);
+    pagePaddings->setMinimum(0);
+    pagePaddings->setMaximum(10);
+    pagePaddings->setObjectName(QStringLiteral("kcfg_PagePaddings"));
+    layout->addRow(i18nc("@label:spinbox Config dialog, general page", "Page Paddings:"), pagePaddings);
+
+
+
+    // Spinbox: scroll delay
+    QSpinBox *scrollDelay = new QSpinBox(this);
+    scrollDelay->setMinimum(1);
+    scrollDelay->setMaximum(20);
+    scrollDelay->setObjectName(QStringLiteral("kcfg_ScrollDelay"));
+    layout->addRow(i18nc("@label:spinbox Config dialog, general page", "Scroll Delay:"), scrollDelay);
+
+    // Spinbox: page offset
+    QSpinBox *scrollOffset = new QSpinBox(this);
+    scrollOffset->setMinimum(4);
+    scrollOffset->setMaximum(20);
+    scrollOffset->setObjectName(QStringLiteral("kcfg_ScrollOffset"));
+    layout->addRow(i18nc("@label:spinbox Config dialog, general page", "Scroll Offset:"), scrollOffset);
 
     // Spinbox: page up/down overlap
     QSpinBox *pageUpDownOverlap = new QSpinBox(this);

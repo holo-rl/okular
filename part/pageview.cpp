@@ -257,6 +257,10 @@ public:
     ToggleActionMenu *aMouseModeMenu;
     QAction *aFitWindowToPage;
 
+    int setting_pagePaddings;
+    bool setting_ultraSmoothScroll;
+    int setting_scrollDelay;
+    int setting_scrollOffset;
     int setting_viewCols;
     bool rtl_Mode;
     // Keep track of whether tablet pen is currently pressed down
@@ -383,6 +387,10 @@ PageView::PageView(QWidget *parent, Okular::Document *document)
     d->aSpeakStop = nullptr;
     d->aSpeakPauseResume = nullptr;
     d->actionCollection = nullptr;
+    d->setting_pagePaddings = Okular::Settings::pagePaddings();
+    d->setting_ultraSmoothScroll = Okular::Settings::ultraSmoothScroll();
+    d->setting_scrollDelay = Okular::Settings::scrollDelay();
+    d->setting_scrollOffset = Okular::Settings::scrollOffset(); 
     d->setting_viewCols = Okular::Settings::viewColumns();
     d->rtl_Mode = Okular::Settings::rtlReadingDirection();
     d->mouseModeActionGroup = nullptr;
@@ -947,6 +955,23 @@ void PageView::reparseConfig()
         d->setting_viewCols = Okular::Settings::viewColumns();
 
         slotRelayoutPages();
+    }
+
+    if ( Okular::Settings::pagePaddings() != d->setting_pagePaddings ) {
+        d->setting_pagePaddings = Okular::Settings::pagePaddings();
+        slotRelayoutPages();
+    }
+
+    if (Okular::Settings::ultraSmoothScroll() != d->setting_ultraSmoothScroll) {
+        d->setting_ultraSmoothScroll = Okular::Settings::ultraSmoothScroll();
+    }
+
+    if (((int)Okular::Settings::scrollDelay() != d->setting_scrollDelay)) {
+        d->setting_scrollDelay = Okular::Settings::scrollDelay();
+    }
+
+    if (((int)Okular::Settings::scrollOffset() != d->setting_scrollOffset)) {
+        d->setting_scrollOffset = Okular::Settings::scrollOffset();
     }
 
     if (Okular::Settings::rtlReadingDirection() != d->rtl_Mode) {
@@ -2125,6 +2150,11 @@ void PageView::keyReleaseEvent(QKeyEvent *e)
     }
 
     if (e->key() == Qt::Key_Escape && d->autoScrollTimer) {
+        d->scrollIncrement = 0;
+        d->autoScrollTimer->stop();
+    }
+    
+    if (d->setting_ultraSmoothScroll && d->autoScrollTimer) {
         d->scrollIncrement = 0;
         d->autoScrollTimer->stop();
     }
@@ -3412,48 +3442,49 @@ void PageView::drawDocumentOnPainter(const QRect contentsRect, QPainter *p)
 
     // Method to linearly interpolate between black (=(0,0,0), omitted) and the background color
     auto interpolateColor = [&backColor](double t) { return QColor(t * backColor.red(), t * backColor.green(), t * backColor.blue()); };
+    if (d->setting_pagePaddings != 0) {
+        // width of the shadow in device pixels
+        static const int shadowWidth = 2 * dpr;
 
-    // width of the shadow in device pixels
-    static const int shadowWidth = 2 * dpr;
+        // iterate over all items painting a black outline and a simple bottom/right gradient
+        for (const PageViewItem *item : qAsConst(d->items)) {
+            // check if a piece of the page intersects the contents rect
+            if (!item->isVisible() || !item->croppedGeometry().intersects(checkRect))
+                continue;
 
-    // iterate over all items painting a black outline and a simple bottom/right gradient
-    for (const PageViewItem *item : qAsConst(d->items)) {
-        // check if a piece of the page intersects the contents rect
-        if (!item->isVisible() || !item->croppedGeometry().intersects(checkRect))
-            continue;
+            // get item and item's outline geometries
+            QRect itemGeometry = item->croppedGeometry();
 
-        // get item and item's outline geometries
-        QRect itemGeometry = item->croppedGeometry();
+            // move the painter to the top-left corner of the real page
+            p->save();
+            p->translate(itemGeometry.left(), itemGeometry.top());
 
-        // move the painter to the top-left corner of the real page
-        p->save();
-        p->translate(itemGeometry.left(), itemGeometry.top());
-
-        // draw the page outline (black border and bottom-right shadow)
-        if (!itemGeometry.contains(contentsRect)) {
-            int itemWidth = itemGeometry.width();
-            int itemHeight = itemGeometry.height();
-            // draw simple outline
-            QPen pen(Qt::black);
-            pen.setWidth(0);
-            p->setPen(pen);
-
-            QRectF outline(-1.0 / dpr, -1.0 / dpr, itemWidth + 1.0 / dpr, itemHeight + 1.0 / dpr);
-            p->drawRect(outline);
-
-            // draw bottom/right gradient
-            for (int i = 1; i <= shadowWidth; i++) {
-                pen.setColor(interpolateColor(double(i) / (shadowWidth + 1)));
+            // draw the page outline (black border and bottom-right shadow)
+            if (!itemGeometry.contains(contentsRect)) {
+                int itemWidth = itemGeometry.width();
+                int itemHeight = itemGeometry.height();
+                // draw simple outline
+                QPen pen(Qt::black);
+                pen.setWidth(0);
                 p->setPen(pen);
-                QPointF left((i - 1) / dpr, itemHeight + i / dpr);
-                QPointF up(itemWidth + i / dpr, (i - 1) / dpr);
-                QPointF corner(itemWidth + i / dpr, itemHeight + i / dpr);
-                p->drawLine(left, corner);
-                p->drawLine(up, corner);
-            }
-        }
 
-        p->restore();
+                QRectF outline(-1.0 / dpr, -1.0 / dpr, itemWidth + 1.0 / dpr, itemHeight + 1.0 / dpr);
+                p->drawRect(outline);
+
+                // draw bottom/right gradient
+                for (int i = 1; i <= shadowWidth; i++) {
+                    pen.setColor(interpolateColor(double(i) / (shadowWidth + 1)));
+                    p->setPen(pen);
+                    QPointF left((i - 1) / dpr, itemHeight + i / dpr);
+                    QPointF up(itemWidth + i / dpr, (i - 1) / dpr);
+                    QPointF corner(itemWidth + i / dpr, itemHeight + i / dpr);
+                    p->drawLine(left, corner);
+                    p->drawLine(up, corner);
+                }
+            }
+
+            p->restore();
+        }
     }
 }
 
@@ -3752,7 +3783,6 @@ void PageView::selectionClear(const ClearMode mode)
 
 // const to be used for both zoomFactorFitMode function and slotRelayoutPages.
 static const int kcolWidthMargin = 6;
-static const int krowHeightMargin = 12;
 
 double PageView::zoomFactorFitMode(ZoomMode mode)
 {
@@ -3763,7 +3793,7 @@ double PageView::zoomFactorFitMode(ZoomMode mode)
     const bool overrideCentering = facingCentered && pageCount < 3;
     const int nCols = overrideCentering ? 1 : viewColumns();
     const int colWidth = viewport()->width() / nCols - kcolWidthMargin;
-    const double rowHeight = viewport()->height() - krowHeightMargin;
+    const double rowHeight = viewport()->height() - d->setting_pagePaddings;
     const PageViewItem *currentItem = d->items[qMax(0, (int)d->document->currentPage())];
     // prevent segmentation fault when opening a new document;
     if (!currentItem)
@@ -4351,12 +4381,12 @@ void PageView::slotRelayoutPages()
     // which each page must well-fit inside a cell
     for (PageViewItem *item : qAsConst(d->items)) {
         // update internal page size (leaving a little margin in case of Fit* modes)
-        updateItemSize(item, colWidth[cIdx] - kcolWidthMargin, viewportHeight - krowHeightMargin);
+        updateItemSize(item, colWidth[cIdx] - kcolWidthMargin, viewportHeight - d->setting_pagePaddings);
         // find row's maximum height and column's max width
         if (item->croppedWidth() + kcolWidthMargin > colWidth[cIdx])
             colWidth[cIdx] = item->croppedWidth() + kcolWidthMargin;
-        if (item->croppedHeight() + krowHeightMargin > rowHeight[rIdx])
-            rowHeight[rIdx] = item->croppedHeight() + krowHeightMargin;
+        if (item->croppedHeight() + d->setting_pagePaddings > rowHeight[rIdx])
+            rowHeight[rIdx] = item->croppedHeight() + d->setting_pagePaddings;
         // handle the 'centering on first row' stuff
         // update col/row indices
         if (++cIdx == nCols) {
@@ -4678,10 +4708,20 @@ void PageView::slotAutoScroll()
         return;
     }
 
-    // compute delay between timer ticks and scroll amount per tick
-    int index = abs(d->scrollIncrement) - 1; // 0..9
-    const int scrollDelay[10] = {200, 100, 50, 30, 20, 30, 25, 20, 30, 20};
-    const int scrollOffset[10] = {1, 1, 1, 1, 1, 2, 2, 2, 4, 4};
+    int scrollDelay[10] = {200, 100, 50, 30, 20, 30, 25, 20, 30, 20};
+    int scrollOffset[10] = {1, 1, 1, 1, 1, 2, 2, 2, 4, 4};
+    int index = 0;
+
+    if(d->setting_ultraSmoothScroll) {
+        // set static timer ticks and scroll amount per tick
+        scrollDelay[0] = { d->setting_scrollDelay };
+        scrollOffset[0] = { d->setting_scrollOffset };
+        index = 0;
+    } else {
+        // compute delay between timer ticks and scroll amount per tick
+        index = abs(d->scrollIncrement) - 1; // 0..9
+    }
+
     d->autoScrollTimer->start(scrollDelay[index]);
     int delta = d->scrollIncrement > 0 ? scrollOffset[index] : -scrollOffset[index];
     d->scroller->scrollTo(d->scroller->finalPosition() + QPoint(0, delta), scrollDelay[index]);
@@ -5210,7 +5250,7 @@ void PageView::slotFitWindowToPage()
     if (!currentPageItem)
         return;
 
-    const QSize pageSize = QSize(currentPageItem->uncroppedWidth() + kcolWidthMargin, currentPageItem->uncroppedHeight() + krowHeightMargin);
+    const QSize pageSize = QSize(currentPageItem->uncroppedWidth() + kcolWidthMargin, currentPageItem->uncroppedHeight() + d->setting_pagePaddings);
     if (verticalScrollBar()->isVisible())
         viewportSize.setWidth(viewportSize.width() + verticalScrollBar()->width());
     if (horizontalScrollBar()->isVisible())
