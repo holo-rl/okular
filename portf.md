@@ -1,6 +1,6 @@
 ---
 title: 'Okular - Added ultra smooth scrolling and padding control'
-date: '21/10/21'
+date: '21-10-21'
 priority: 100
 ---
 
